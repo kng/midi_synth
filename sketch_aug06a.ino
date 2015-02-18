@@ -2,14 +2,22 @@
 //      NPN darlington output. It needs to be complemented with a
 //      suitable NPN transistor such as BC546B.
 
-unsigned short freq[128+1];
-byte vol[128];
+/* DAC is located on PORTD2-7 (D2-D7)
+ * PB0 should oscillate at SRATE
+ * MIDI input to RX (D0)
+ * R2-R feedback to A0
+ *
+ * tested on Arduino 1.0.6
+ */
 
 #define SRATE 44100         //sample rate
-#define PINOFS 3
-#define MAX_KEYS 8
+//#define PINOFS 3
+#define MAX_KEYS 4          // number of oscillators, tune up to about 8 until PB0 stops oscillating at SRATE
 #define DAC_BITS 6
+#define NOTES 128
 
+unsigned short freq[NOTES+1];
+byte vol[NOTES];
 short osc[MAX_KEYS];
 unsigned char keys[MAX_KEYS];
 unsigned char vols[MAX_KEYS];
@@ -28,7 +36,7 @@ void computeKeys() {
     vols2[x] = 0;
   }
   unsigned char nkeys = 0;
-  for (unsigned char x = 0; x < 128; x++) {
+  for (unsigned char x = 0; x < NOTES; x++) {
     if (vol[x]) {
       vols2[nkeys]   = vol[x];
       keys2[nkeys++] = x;
@@ -49,25 +57,23 @@ void setup() {
   TCCR1B = 0;
   TCNT1  = 0;
 
-  OCR1A = 16000000 / SRATE; // compare match register 16MHz/256/2Hz
+  OCR1A = F_CPU / SRATE; // compare match register 16MHz/256/2Hz
   TCCR1B |= (1 << WGM12);   // CTC mode
   TCCR1B |= (1 << CS10);    // 1 prescaler 
   TIMSK1 |= (1 << OCIE1A);  // enable timer compare interrupt
 
-  DDRB = 1;
+  DDRB = 1;    // debug output on PB0
   DDRD = 0xFF;
   newkeys = 0;
 
-  for (char x = 0;; x++) {
+  for (unsigned char x = 0; x < NOTES; x++) {
     //A4 = 69 (440 Hz)
-    float f = 440.0f * powf(2, (x - 69) / 12.0);
+    float f = 440.0 * pow(2, (x - 69) / 12.0);
     freq[x] = 65536 * f / SRATE;
     //osc[x] = 0;
     vol[x] = 0;
-    if (x == 127)
-      break;
   }
-  freq[128] = 0;
+  freq[NOTES] = 0;
   computeKeys();
 
   //calibrate DAC
@@ -155,7 +161,7 @@ byte isvel = 0;
 byte shouldoutput = 0;
 
 void decay() {
-  for (unsigned char x = 0; x < 128; x++) {
+  for (unsigned char x = 0; x < NOTES; x++) {
     if (vol[x]) {
       vol[x]--;
     }
